@@ -9,25 +9,125 @@ import { Person } from "shared/models/person"
 import { useApi } from "shared/hooks/use-api"
 import { StudentListTile } from "staff-app/components/student-list-tile/student-list-tile.component"
 import { ActiveRollOverlay, ActiveRollAction } from "staff-app/components/active-roll-overlay/active-roll-overlay.component"
+import { StateList } from "staff-app/components/roll-state/roll-state-list.component"
+
+const buildReport = (students: Person[]) => {
+  const result: StateList[] = [
+    { type: "all", count: students.length },
+    { type: "present", count: 0 },
+    { type: "late", count: 0 },
+    { type: "absent", count: 0 },
+  ]
+  students.forEach(({ status }) => {
+    if (status) {
+      const idx = result.findIndex(({ type }) => type === status)
+      result[idx].count++
+    }
+  })
+  return result
+}
 
 export const HomeBoardPage: React.FC = () => {
   const [isRollMode, setIsRollMode] = useState(false)
+  const [isFilterMode, setIsFilterMode] = useState(false)
+  const [students, setStudents] = useState<Person[]>([])
+  const [filteredData, setFilteredStat] = useState<Person[]>([])
   const [getStudents, data, loadState] = useApi<{ students: Person[] }>({ url: "get-homeboard-students" })
+
+  const [saveStudents] = useApi<{ students: Person[] }>({ url: "save-roll" })
 
   useEffect(() => {
     void getStudents()
   }, [getStudents])
 
-  const onToolbarAction = (action: ToolbarAction) => {
+  useEffect(() => {
+    if (data) {
+      setStudents(data.students)
+    }
+  }, [data])
+
+  const latestStud: any = students
+
+  const onToolbarAction = (action: ToolbarAction, value = "") => {
     if (action === "roll") {
       setIsRollMode(true)
+    } else if (action === "sort") {
+      if (!value) {
+        return
+      }
+      const newStudents = [...students]
+
+      if (value === "roll_asc") {
+        newStudents.sort((a, b) => (a.id > b.id ? 1 : -1))
+        setStudents(newStudents)
+
+        return
+      }
+      if (value === "roll_desc") {
+        newStudents.sort((a, b) => (a.id < b.id ? 1 : -1))
+        setStudents(newStudents)
+
+        return
+      }
+      newStudents.sort(function (a: any, b: any) {
+        return a[value].localeCompare(b[value])
+      })
+
+      setStudents(newStudents)
+    } else if (action === "search") {
+      if (!value && data?.students) {
+        setStudents([...data.students])
+      } else {
+        const studentData = data?.students
+        if (students.length !== 0) {
+          const filteredStudents = students.filter((student) => (student.first_name + " " + student.last_name).toLowerCase().includes(value.toLowerCase()))
+          setStudents(filteredStudents)
+        } else {
+          const filteredStudent: any = studentData?.filter((lstudent) => (lstudent.first_name + " " + lstudent.last_name).toLowerCase().includes(value.toLowerCase()))
+          setStudents(filteredStudent)
+        }
+      }
+    } else if (action === "reset") {
+      if (latestStud) {
+        setStudents([...latestStud])
+      }
     }
   }
 
-  const onActiveRollAction = (action: ActiveRollAction) => {
+  const onActiveRollAction = (action: ActiveRollAction, value = "") => {
     if (action === "exit") {
       setIsRollMode(false)
+    } else if (action === "filter") {
+      if (value === "all") {
+        setIsFilterMode(false)
+        return
+      }
+      setIsFilterMode(true)
+
+      if (students.length !== 0) {
+        const filteredStudent: any = students?.filter((student) => student.status === value)
+        setFilteredStat(filteredStudent)
+      }
+    } else if (action === "complete") {
+      const transformedStudents = students.map(({ id, status }) => ({
+        student_id: id,
+        roll_state: status || "unmark",
+      }))
+      saveStudents({
+        student_roll_states: transformedStudents,
+      })
+      window.location.href = "http://localhost:3000/staff/activity"
     }
+  }
+
+  const handleItemClick = (id: number, status: string) => {
+    const updatedStudents = students.map((student) => {
+      if (student.id === id) {
+        return { ...student, status }
+      }
+      return student
+    })
+    setStudents(updatedStudents)
   }
 
   return (
@@ -41,10 +141,20 @@ export const HomeBoardPage: React.FC = () => {
           </CenteredContainer>
         )}
 
-        {loadState === "loaded" && data?.students && (
+        {loadState === "loaded" && data?.students && !isFilterMode && (
           <>
-            {data.students.map((s) => (
-              <StudentListTile key={s.id} isRollMode={isRollMode} student={s} />
+            {students.length === 0 && <div>No Data</div>}
+            {students.map((s) => (
+              <StudentListTile key={s.id} isRollMode={isRollMode} student={s} onItemClick={(status: string) => handleItemClick(s.id, status)} />
+            ))}
+          </>
+        )}
+
+        {loadState === "loaded" && isFilterMode && (
+          <>
+            {filteredData.length === 0 && <div>No Data</div>}
+            {filteredData.map((s) => (
+              <StudentListTile key={s.id} isRollMode={isRollMode} student={s} isFilterMode={isFilterMode} />
             ))}
           </>
         )}
@@ -55,24 +165,48 @@ export const HomeBoardPage: React.FC = () => {
           </CenteredContainer>
         )}
       </S.PageContainer>
-      <ActiveRollOverlay isActive={isRollMode} onItemClick={onActiveRollAction} />
+      <ActiveRollOverlay isActive={isRollMode} onItemClick={onActiveRollAction} list={buildReport(latestStud)} />
     </>
   )
 }
 
-type ToolbarAction = "roll" | "sort"
+type ToolbarAction = "roll" | "sort" | "search" | "reset"
 interface ToolbarProps {
   onItemClick: (action: ToolbarAction, value?: string) => void
 }
 const Toolbar: React.FC<ToolbarProps> = (props) => {
   const { onItemClick } = props
+
   return (
     <S.ToolbarContainer>
-      <div onClick={() => onItemClick("sort")}>First Name</div>
-      <div>Search</div>
-      <S.Button onClick={() => onItemClick("roll")}>Start Roll</S.Button>
+      <div style={{ cursor: "pointer" }}>
+        Sort by
+        <select style={{ marginLeft: "5px" }} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onItemClick("sort", e.target.value)}>
+          <option value="roll_asc">Roll Ascending</option>
+          <option value="roll_desc">Roll Descending</option>
+          <option value="first_name">First name</option>
+          <option value="last_name">Last name</option>
+        </select>
+      </div>
+      <>
+        <input style={cancelInput} placeholder="Search" type="text" onChange={(e: React.ChangeEvent<HTMLInputElement>) => onItemClick("search", e.target.value)} />
+      </>
+      <S.Button style={{ cursor: "pointer" }} onClick={() => onItemClick("roll")}>
+        Start Roll
+      </S.Button>
     </S.ToolbarContainer>
   )
+}
+
+const cancelSearch: any = {
+  cursor: "pointer",
+  position: "relative",
+  right: "55px",
+}
+
+const cancelInput: any = {
+  position: "relative",
+  left: "70px",
 }
 
 const S = {

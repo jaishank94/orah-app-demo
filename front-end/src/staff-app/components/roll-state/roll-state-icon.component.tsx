@@ -4,6 +4,12 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { BorderRadius } from "shared/styles/styles"
 import { Colors } from "shared/styles/colors"
 import { RolllStateType } from "shared/models/roll"
+import {
+  withStyles
+} from "@material-ui/core/styles";
+import Tooltip from "@material-ui/core/Tooltip";
+
+
 
 interface Props {
   type: RolllStateType
@@ -16,6 +22,31 @@ export const RollStateIcon: React.FC<Props> = (props) => {
     <S.Icon size={size} border={type === "unmark"} bgColor={getBgColor(type)} clickable={Boolean(onClick)} onClick={onClick}>
       <FontAwesomeIcon icon="check" size={size > 14 ? "lg" : "sm"} />
     </S.Icon>
+  )
+}
+
+interface Rrops {
+  type: RolllStateType
+  size?: number
+}
+
+export const RollerStateIcon: React.FC<Rrops> = (rrops) => {
+  const { type, size = 20 } = rrops
+  const TextOnlyTooltip:any = withStyles( {
+    tooltip: {
+      color: "white",
+      position: "relative",
+      left: "15px",
+      fontSize : "15px",
+      backgroundColor: statusTool(type)
+    }
+  })(Tooltip);
+  return (
+    <TextOnlyTooltip title={statusValues(type)} placement="right" >
+    <R.Icon size={size} border={type === "unmark"} bgColor={getBgColor(type)} >
+      <FontAwesomeIcon icon="check" size={size > 14 ? "lg" : "sm"} />
+    </R.Icon>
+    </TextOnlyTooltip>
   )
 }
 
@@ -34,6 +65,37 @@ function getBgColor(type: RolllStateType) {
   }
 }
 
+function statusTool(type: RolllStateType) {
+  switch (type) {
+    case "unmark":
+      return "#f50c0c"
+    case "present":
+      return "#13943b"
+    case "absent":
+      return "#9b9b9b"
+    case "late":
+      return "#f5a623"
+    default:
+      return "#13943b"
+  }
+}
+
+
+function statusValues(type: RolllStateType) {
+  switch (type) {
+    case "unmark":
+      return "Not Marked"
+    case "present":
+      return "Present"
+    case "absent":
+      return "Absent"
+    case "late":
+      return "Late"
+    default:
+      return "Not Marked"
+  }
+}
+
 const S = {
   Icon: styled.div<{ size: number; border: boolean; bgColor: string; clickable: boolean }>`
     display: flex;
@@ -46,5 +108,20 @@ const S = {
     width: ${({ size }) => size}px;
     height: ${({ size }) => size}px;
     cursor: ${({ clickable }) => (clickable ? "pointer" : undefined)};
+  `,
+}
+
+
+const R = {
+  Icon: styled.div<{ size: number; border: boolean; bgColor: string;  }>`
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    background-color: ${({ bgColor }) => bgColor};
+    border: 2px solid ${({ border }) => (border ? Colors.dark.lighter : "transparent")};
+    border-radius: ${BorderRadius.rounded};
+    width: ${({ size }) => size}px;
+    height: ${({ size }) => size}px;
   `,
 }
